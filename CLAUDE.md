@@ -1,3 +1,182 @@
+# AuditHawk — Project Context
+> AI-Powered Security Audit Agent | Laravel 13 + Inertia v3 + React 19 + Tailwind v4
+
+## What This App Does
+
+AuditHawk is a full-stack web application where authenticated users submit a GitHub URL or a zip file and receive a comprehensive security vulnerability report. Two AI engines run independently and cross-reference their findings:
+
+- **Claude** (`claude-sonnet-4-20250514`) — primary engine via Anthropic API. Runs an agentic tool-use loop across the full codebase, using `flag_vulnerability` and `request_file_focus` tool calls. Up to 10 turns.
+- **Gemini** (`gemini-2.0-flash`) — validation engine via Google AI Studio (plain API key in URL — no OAuth, no service account). Single-pass scan returning structured JSON via `responseMimeType: application/json`.
+
+A `FindingReconciliationService` reconciles both engines' findings. Findings confirmed by both engines get `consensus: confirmed` and `confidence_score: 0.95`. Single-engine findings get `0.65`.
+
+## Stack Reality — Monorepo, Not Two Repos
+
+The integration guide in `STRUCTURE/` describes two separate repos (standalone Laravel API + standalone Vite/React frontend). **This project is a monorepo**: Laravel + Inertia v3 + React 19. There is no separate frontend repo.
+
+Key implications:
+- Frontend pages live in `resources/js/pages/` as `.tsx` files, not `src/screens/`
+- Components live in `resources/js/components/` — use `.tsx`
+- Use Wayfinder (`@/actions/` / `@/routes/`) for typed route calls — never hardcode URLs
+- Navigation uses Inertia's `<Link>` and `router`, not React Router
+- The audit API routes (`/api/audits/*`) still exist for SSE streaming and file submission — these are not Inertia routes
+- Authentication is handled by Fortify (already wired up) — all audit routes require auth
+
+## Backend Architecture
+
+```
+POST /api/audits
+        ↓
+RunAuditJob (queued, timeout=600s, tries=1)
+        ↓
+Stage 1: RepoIngestionService
+    ├── GitHub URL → GitHub API tree → fetch auditable files
+    └── File upload → unzip to storage/app/audits/{id} → read directory
+
+Stage 2: ClaudeSecurityProvider  (implements AiSecurityProvider)
+    ├── Agentic loop, max 10 turns
+    ├── Tools: flag_vulnerability, request_file_focus
+    └── Broadcasts AuditProgressUpdated event per finding (SSE)
+
+Stage 3: GeminiSecurityProvider  (implements AiSecurityProvider)
+    ├── Single-pass, responseMimeType: application/json
+    └── Auth: ?key=GEMINI_API_KEY in URL — no extra headers
+
+Stage 4: FindingReconciliationService
+    ├── confirmed  → both agree, line within ±5  → confidence 0.95
+    ├── claude_only → Claude only               → confidence 0.65
+    └── gemini_only → Gemini only               → confidence 0.65
+
+Stage 5: CveService
+    └── OSV API (free) → enrich insecure_dependency findings
+```
+
+## Backend File Map (what to build)
+
+```
+app/
+├── Console/Commands/
+│   ├── TestClaudeConnection.php    # artisan audithawk:test-claude
+│   └── TestGeminiConnection.php    # artisan audithawk:test-gemini
+├── Contracts/
+│   └── AiSecurityProvider.php      # interface: scanCodebase(), getProviderName()
+├── Events/
+│   └── AuditProgressUpdated.php    # ShouldBroadcast, channel: audit.{id}
+├── Http/Controllers/
+│   └── AuditController.php         # submit(), show(), stream(), index()
+├── Jobs/
+│   └── RunAuditJob.php             # $timeout=600, $tries=1
+├── Models/
+│   ├── AuditReport.php             # HasUuids, hasMany(AuditFinding)
+│   └── AuditFinding.php            # HasUuids, belongsTo(AuditReport)
+└── Services/
+    ├── Providers/
+    │   ├── ClaudeSecurityProvider.php
+    │   └── GeminiSecurityProvider.php
+    ├── AuditPipelineService.php
+    ├── CveService.php
+    ├── FindingReconciliationService.php
+    └── RepoIngestionService.php
+
+config/audithawk.php    ← already exists — do not recreate
+```
+
+## Frontend File Map (what to build — Inertia pages)
+
+```
+resources/js/
+├── pages/audit/
+│   ├── Index.tsx       # Input screen — URL field + file upload
+│   └── Show.tsx        # Report screen — summary stats + findings list
+│
+├── components/audit/
+│   ├── UrlInput.tsx
+│   ├── FileUpload.tsx
+│   ├── StageTracker.tsx        # Loading: animated pipeline stages
+│   ├── LiveFindingFeed.tsx     # Loading: SSE findings as they arrive
+│   ├── SummaryStats.tsx        # Report: 6 severity stat cards
+│   ├── EngineRow.tsx           # Report: engines used + consensus legend
+│   ├── FindingCard.tsx         # Report: collapsible finding detail
+│   └── ConfidenceBar.tsx       # Report: visual 0–1 bar
+│
+├── hooks/audit/
+│   ├── useAudit.ts             # Master state: submit → poll → complete
+│   └── useSSEStream.ts         # EventSource lifecycle — NOT Inertia router
+│
+├── constants/audit.ts          # SEVERITY, CONSENSUS, STAGES, STAT_CARDS
+└── utils/audit.ts              # cvssToColor, formatDateTime, sortFindings
+```
+
+The audit `Index.tsx` page manages three UI states (`input` | `loading` | `report`) in React state — no separate Inertia page navigation between them. Use `useAudit` hook for all state transitions.
+
+## API Contract (audit routes only — not Inertia routes)
+
+| Method | Path                       | Controller method |
+|--------|----------------------------|-------------------|
+| POST   | `/api/audits`              | `submit()`        |
+| GET    | `/api/audits`              | `index()`         |
+| GET    | `/api/audits/{id}`         | `show()`          |
+| GET    | `/api/audits/{id}/stream`  | `stream()`        |
+
+`submit()` returns 202 `{ audit_id, status: "pending", message }`.
+`stream()` returns `text/event-stream` with `X-Accel-Buffering: no`, polling every 2s, 5-min timeout.
+
+SSE event types: `connected`, `stage`, `finding`, `focus`, `status`, `done`, `error`.
+
+Finding shape reference:
+```
+type            string   sql_injection | xss | hardcoded_secret | broken_auth |
+                         insecure_dependency | path_traversal | ssrf | idor | rce |
+                         misconfigured_permissions
+severity        string   critical | high | medium | low
+cvss_score      float    0.0–10.0
+consensus       string   confirmed | claude_only | gemini_only
+confidence_score float   0.95 (confirmed) | 0.65 (single engine)
+fix_suggestions object   { primary: string|null, alternative: string|null }
+reasoning_trace string[] steps — may be empty for gemini_only
+```
+
+## Design Tokens (match these exactly in Tailwind/inline styles)
+
+| Token      | Value       | Usage                              |
+|------------|-------------|------------------------------------|
+| Background | `#060608`   | Page base                          |
+| Surface    | `#0d0d12`   | Cards, inputs                      |
+| Border     | `white/7`   | Dividers, card edges               |
+| Text       | `#e8e8f0`   | Primary readable text              |
+| Muted      | `#666680`   | Labels, placeholders               |
+| Accent     | `#00e5ff`   | Confirmed, Claude, interactive CTA |
+| Accent2    | `#a78bfa`   | Gemini, secondary highlights       |
+
+Severity colours: `critical=#ff3b3b`, `high=#ff8c00`, `medium=#f5c518`, `low=#4caf50`.
+
+## Key Constraints
+
+| Constraint            | Value         | Location                      |
+|-----------------------|---------------|-------------------------------|
+| Max files per audit   | 50            | `audithawk.audit.max_files`   |
+| Max file size         | 100KB         | `audithawk.audit.max_file_size` |
+| Audit job timeout     | 10 minutes    | `RunAuditJob::$timeout`       |
+| Claude agentic turns  | 10 max        | `ClaudeSecurityProvider`      |
+| Queue retries         | 1 (no retry)  | `RunAuditJob::$tries`         |
+| SSE stream timeout    | 5 minutes     | `AuditController::stream()`   |
+| CVE cache duration    | 24 hours      | `CveService`                  |
+
+## Service Provider Bindings
+
+All services are singletons in `AppServiceProvider::register()`. `boot()` throws `RuntimeException` if `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` are missing (skipped when `app()->runningUnitTests()`).
+
+## Test Commands (Artisan)
+
+```bash
+php artisan audithawk:test-claude   # send a vulnerable PHP snippet to Claude
+php artisan audithawk:test-gemini   # send a vulnerable PHP snippet to Gemini
+```
+
+Both dump JSON findings to console — run to confirm API keys work before full pipeline.
+
+---
+
 <laravel-boost-guidelines>
 === foundation rules ===
 
