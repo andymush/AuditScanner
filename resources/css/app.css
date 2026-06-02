@@ -141,3 +141,12 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Audit page typography — scoped to .audit-root so it does not affect the main app */
+.audit-root {
+    font-family: 'Syne', ui-sans-serif, system-ui, sans-serif;
+}
+
+.audit-root .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
