@@ -2,6 +2,11 @@ import type { AuditReport } from '@/types/audit';
 
 const BASE = (import.meta as ImportMeta & { env: Record<string, string> }).env?.VITE_API_BASE_URL ?? '/api';
 
+function csrfToken(): string {
+    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
     if (!res.ok) {
         const body = await res.text();
@@ -20,7 +25,7 @@ export async function submitGithubAudit(repoUrl: string): Promise<SubmitResult> 
     return handleResponse<SubmitResult>(
         await fetch(`${BASE}/audits`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': csrfToken() },
             body: JSON.stringify({ source_type: 'github_url', repo_url: repoUrl }),
         }),
     );
@@ -30,8 +35,13 @@ export async function submitFileAudit(file: File): Promise<SubmitResult> {
     const form = new FormData();
     form.append('source_type', 'file_upload');
     form.append('file', file);
-    // Do not set Content-Type — browser sets it with the correct multipart boundary
-    return handleResponse<SubmitResult>(await fetch(`${BASE}/audits`, { method: 'POST', body: form }));
+    return handleResponse<SubmitResult>(
+        await fetch(`${BASE}/audits`, {
+            method: 'POST',
+            headers: { 'X-XSRF-TOKEN': csrfToken() },
+            body: form,
+        }),
+    );
 }
 
 export async function getAudit(auditId: string): Promise<AuditReport> {

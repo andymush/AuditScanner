@@ -6,6 +6,7 @@ use App\Events\AuditProgressUpdated;
 use App\Models\AuditFinding;
 use App\Models\AuditReport;
 use App\Services\AuditPipelineService;
+use App\Services\DemoAuditPipeline;
 use App\Services\RepoIngestionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -24,32 +25,35 @@ class RunAuditJob implements ShouldQueue
         public readonly string $auditReportId,
     ) {}
 
-    public function handle(AuditPipelineService $pipeline, RepoIngestionService $ingestion): void
+    public function handle(AuditPipelineService $pipeline, DemoAuditPipeline $demo, RepoIngestionService $ingestion): void
     {
         $report = AuditReport::findOrFail($this->auditReportId);
         $report->update(['status' => 'running', 'started_at' => now()]);
 
-        AuditProgressUpdated::dispatch($report->id, [
-            'type'    => 'stage',
-            'stage'   => 1,
-            'message' => 'Ingesting repository files...',
-        ]);
+        $meta = $report->meta ?? [];
+        $meta['current_stage'] = 1;
+        $meta['stage_message'] = 'Ingesting repository files...';
+        $report->update(['meta' => $meta]);
 
         try {
-            $files = match ($report->source_type) {
-                'github_url'  => $ingestion->fetchFromGithub($report->repo_url),
-                'file_upload' => $ingestion->fetchFromUpload(
-                    storage_path("app/audits/{$report->id}/upload.zip"),
-                    $report->id
-                ),
-                default => throw new RuntimeException("Unknown source_type: {$report->source_type}"),
-            };
+            if (config('audithawk.demo_mode')) {
+                $result = $demo->run($report->fresh());
+            } else {
+                $files = match ($report->source_type) {
+                    'github_url' => $ingestion->fetchFromGithub($report->repo_url),
+                    'file_upload' => $ingestion->fetchFromUpload(
+                        storage_path("app/audits/{$report->id}/upload.zip"),
+                        $report->id
+                    ),
+                    default => throw new RuntimeException("Unknown source_type: {$report->source_type}"),
+                };
 
-            if (empty($files)) {
-                throw new RuntimeException('No auditable files found in the repository.');
+                if (empty($files)) {
+                    throw new RuntimeException('No auditable files found in the repository.');
+                }
+
+                $result = $pipeline->run($files, $report->id);
             }
-
-            $result = $pipeline->run($files, $report->id);
 
             foreach ($result['findings'] as $finding) {
                 AuditFinding::create([
@@ -59,34 +63,36 @@ class RunAuditJob implements ShouldQueue
             }
 
             $report->update([
-                'status'       => 'complete',
-                'meta'         => $result['meta'],
+                'status' => 'complete',
+                'meta' => $result['meta'],
                 'completed_at' => now(),
             ]);
 
             AuditProgressUpdated::dispatch($report->id, [
-                'type'   => 'done',
+                'type' => 'done',
                 'status' => 'complete',
             ]);
 
         } catch (\Throwable $e) {
             Log::error('AuditHawk: RunAuditJob failed', [
                 'audit_id' => $report->id,
-                'error'    => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             $report->update([
-                'status'        => 'failed',
+                'status' => 'failed',
                 'error_message' => $e->getMessage(),
             ]);
 
             AuditProgressUpdated::dispatch($report->id, [
-                'type'    => 'error',
+                'type' => 'error',
                 'message' => 'Audit failed: '.$e->getMessage(),
             ]);
 
         } finally {
-            $ingestion->cleanupTempFiles($report->id);
+            if (! config('audithawk.demo_mode')) {
+                $ingestion->cleanupTempFiles($report->id);
+            }
         }
     }
 }

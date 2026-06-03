@@ -3,7 +3,7 @@
 use App\Http\Controllers\AuditController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum'])->prefix('audits')->group(function (): void {
+Route::middleware(['web', 'auth'])->prefix('audits')->group(function (): void {
     Route::post('/', [AuditController::class, 'submit']);
     Route::get('/', [AuditController::class, 'index']);
     Route::get('/{id}', [AuditController::class, 'show']);

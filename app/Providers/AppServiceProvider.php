@@ -47,10 +47,6 @@ class AppServiceProvider extends ServiceProvider
             return;
         }
 
-        if (empty(config('audithawk.anthropic.key'))) {
-            throw new \RuntimeException('ANTHROPIC_API_KEY is missing from .env');
-        }
-
         if (empty(config('audithawk.gemini.key'))) {
             throw new \RuntimeException('GEMINI_API_KEY is missing from .env');
         }

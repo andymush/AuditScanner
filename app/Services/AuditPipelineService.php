@@ -17,13 +17,18 @@ class AuditPipelineService
 
     public function run(array $files, string $auditId): array
     {
-        AuditProgressUpdated::dispatch($auditId, [
-            'type'    => 'stage',
-            'stage'   => 1,
-            'message' => 'Ingestion complete. Claude is performing deep analysis...',
-        ]);
+        $claudeFindings = [];
+        $claudeEnabled = ! empty(config('audithawk.anthropic.key'));
 
-        $claudeFindings = $this->claude->scanCodebase($files, $auditId);
+        if ($claudeEnabled) {
+            AuditProgressUpdated::dispatch($auditId, [
+                'type'    => 'stage',
+                'stage'   => 1,
+                'message' => 'Ingestion complete. Claude is performing deep analysis...',
+            ]);
+
+            $claudeFindings = $this->claude->scanCodebase($files, $auditId);
+        }
 
         AuditProgressUpdated::dispatch($auditId, [
             'type'    => 'stage',
@@ -49,8 +54,12 @@ class AuditPipelineService
 
         $enriched = $this->cve->enrichFindings($reconciled);
 
+        $enginesUsed = $claudeEnabled
+            ? [$this->claude->getProviderName(), $this->gemini->getProviderName()]
+            : [$this->gemini->getProviderName()];
+
         $meta = [
-            'engines_used'    => [$this->claude->getProviderName(), $this->gemini->getProviderName()],
+            'engines_used'    => $enginesUsed,
             'files_scanned'   => count($files),
             'claude_count'    => count($claudeFindings),
             'gemini_count'    => count($geminiFindings),

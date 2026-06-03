@@ -24,6 +24,8 @@ return [
         'base_url' => 'https://api.github.com',
     ],
 
+    'demo_mode' => env('AUDIT_DEMO_MODE', false),
+
     'audit' => [
         // File extensions worth scanning
         'auditable_extensions' => [
