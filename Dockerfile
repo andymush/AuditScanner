@@ -1,7 +1,7 @@
 # syntax = docker/dockerfile:experimental
 
 ARG PHP_VERSION=8.4
-ARG NODE_VERSION=18
+ARG NODE_VERSION=22
 FROM ubuntu:22.04 as base
 LABEL fly_launch_runtime="laravel"
 
@@ -59,6 +59,7 @@ WORKDIR /var/www/html
 # 4. Setup application dependencies 
 RUN composer install --optimize-autoloader --no-dev \
     && mkdir -p storage/logs \
+    && APP_KEY=base64:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa= php artisan wayfinder:generate --with-form \
     && php artisan optimize:clear \
     && chown -R www-data:www-data /var/www/html \
     && echo "MAILTO=\"\"\n* * * * * www-data /usr/bin/php /var/www/html/artisan schedule:run" > /etc/cron.d/laravel \
@@ -80,6 +81,10 @@ RUN mkdir -p  /app
 WORKDIR /app
 COPY . .
 COPY --from=base /var/www/html/vendor /app/vendor
+COPY --from=base /var/www/html/resources/js/actions /app/resources/js/actions
+COPY --from=base /var/www/html/resources/js/routes /app/resources/js/routes
+
+ENV WAYFINDER_CMD=true
 
 # Use yarn or npm depending on what type of
 # lock file we might find. Defaults to

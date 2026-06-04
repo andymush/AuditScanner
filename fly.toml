@@ -9,15 +9,18 @@ console_command = 'php /var/www/html/artisan tinker'
 
 [build]
   [build.args]
-    NODE_VERSION = '18'
+    NODE_VERSION = '22'
     PHP_VERSION = '8.4'
 
 [env]
   APP_ENV = 'production'
+  AUDIT_DEMO_MODE = 'true'
+  DB_CONNECTION = 'sqlite'
+  QUEUE_CONNECTION = 'database'
   LOG_CHANNEL = 'stderr'
   LOG_LEVEL = 'info'
   LOG_STDERR_FORMATTER = 'Monolog\Formatter\JsonFormatter'
-  SESSION_DRIVER = 'cookie'
+  SESSION_DRIVER = 'database'
   SESSION_SECURE_COOKIE = 'true'
 
 [http_service]

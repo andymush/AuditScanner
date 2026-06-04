@@ -43,7 +43,7 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function enforceApiKeys(): void
     {
-        if (app()->runningUnitTests() || app()->runningInConsole()) {
+        if (app()->runningUnitTests() || app()->runningInConsole() || config('audithawk.demo_mode')) {
             return;
         }
 
