@@ -120,10 +120,12 @@ class StoreAuditRequestValidationTest extends TestCase
     {
         Storage::fake('local');
 
-        $response = $this->actingAs($this->user)->post('/api/audits', [
-            'source_type' => 'file_upload',
-            'file' => UploadedFile::fake()->create('project.zip', 1024, 'application/zip'),
-        ]);
+        $response = $this->actingAs($this->user)
+            ->withHeader('Accept', 'application/json')
+            ->post('/api/audits', [
+                'source_type' => 'file_upload',
+                'file' => UploadedFile::fake()->create('project.zip', 1024, 'application/zip'),
+            ]);
 
         $response->assertStatus(202);
     }
@@ -132,10 +134,12 @@ class StoreAuditRequestValidationTest extends TestCase
     {
         Storage::fake('local');
 
-        $response = $this->actingAs($this->user)->post('/api/audits', [
-            'source_type' => 'file_upload',
-            'file' => UploadedFile::fake()->create('project.tar.gz', 1024, 'application/gzip'),
-        ]);
+        $response = $this->actingAs($this->user)
+            ->withHeader('Accept', 'application/json')
+            ->post('/api/audits', [
+                'source_type' => 'file_upload',
+                'file' => UploadedFile::fake()->create('project.tar.gz', 1024, 'application/gzip'),
+            ]);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['file']);
@@ -145,10 +149,12 @@ class StoreAuditRequestValidationTest extends TestCase
     {
         Storage::fake('local');
 
-        $response = $this->actingAs($this->user)->post('/api/audits', [
-            'source_type' => 'file_upload',
-            'file' => UploadedFile::fake()->create('large.zip', 21000, 'application/zip'),
-        ]);
+        $response = $this->actingAs($this->user)
+            ->withHeader('Accept', 'application/json')
+            ->post('/api/audits', [
+                'source_type' => 'file_upload',
+                'file' => UploadedFile::fake()->create('large.zip', 21000, 'application/zip'),
+            ]);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['file']);
