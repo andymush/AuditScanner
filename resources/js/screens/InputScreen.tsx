@@ -32,7 +32,7 @@ export default function InputScreen({ onSubmitUrl, onSubmitFile, error }: Props)
             </h1>
 
             <p className="text-[#666680] text-base leading-relaxed max-w-md mx-auto mb-10">
-                Submit a GitHub repository or a zip file. Claude and Gemini independently audit your
+                Submit a GitHub repository or a zip file. Claude independently audits your
                 codebase and cross-reference findings for verified results.
             </p>
 

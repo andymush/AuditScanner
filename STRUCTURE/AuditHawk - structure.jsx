@@ -518,7 +518,7 @@ function InputScreen({ onSubmit, onDemo }) {
         Find vulnerabilities<br /><span>before attackers do</span>
       </h1>
       <p className="hero-sub">
-        Submit a GitHub repository. Claude and Gemini independently audit your codebase
+        Submit a GitHub repository. Claude independently audits your codebase
         and cross-reference their findings for verified, high-confidence results.
       </p>
 
