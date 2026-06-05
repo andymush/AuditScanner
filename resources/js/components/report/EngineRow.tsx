@@ -19,18 +19,21 @@ export default function EngineRow({ meta = {}, findings = [] }: Props) {
                 <span className="font-mono text-xs font-bold text-[#666680] uppercase tracking-wider">
                     Engines
                 </span>
-                {(meta.engines_used ?? []).map((name, i) => (
-                    <span
-                        key={name}
-                        className="flex items-center gap-2 bg-[#0d0d12] border border-white/7 rounded-lg px-3 py-1.5 font-mono text-xs text-[#666680]"
-                    >
+                {(meta.engines_used ?? []).map((name, i) => {
+                    if (name.toLowerCase().includes('gemini')) return null; // hidden for demo
+                    return (
                         <span
-                            className="w-2 h-2 rounded-full"
-                            style={{ background: i === 0 ? '#a78bfa' : '#34d399' }}
-                        />
-                        {name}
-                    </span>
-                ))}
+                            key={name}
+                            className="flex items-center gap-2 bg-[#0d0d12] border border-white/7 rounded-lg px-3 py-1.5 font-mono text-xs text-[#666680]"
+                        >
+                            <span
+                                className="w-2 h-2 rounded-full"
+                                style={{ background: i === 0 ? '#a78bfa' : '#34d399' }}
+                            />
+                            {name}
+                        </span>
+                    );
+                })}
                 {meta.files_scanned != null && (
                     <span className="ml-auto font-mono text-xs text-[#666680] bg-[#0d0d12] border border-white/7 rounded-lg px-3 py-1.5">
                         {meta.files_scanned} files scanned
@@ -40,6 +43,7 @@ export default function EngineRow({ meta = {}, findings = [] }: Props) {
 
             <div className="flex flex-wrap gap-5">
                 {(Object.keys(counts) as Consensus[]).map((key) => {
+                    if (key === 'gemini_only') return null; // hidden for demo
                     const c = CONSENSUS[key];
                     return (
                         <div key={key} className="flex items-center gap-2 text-sm">
