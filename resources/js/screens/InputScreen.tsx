@@ -8,7 +8,9 @@ interface Props {
     error: string | null;
 }
 
-const FEATURE_TAGS = ['Claude Sonnet', 'Gemini Flash', 'CVSS Scoring', 'CVE Cross-Reference', 'Dual-Engine Confidence'];
+const FEATURE_TAGS = ['Claude Sonnet',
+    // 'Gemini Flash', 
+    'CVSS Scoring', 'CVE Cross-Reference', 'Dual-Engine Confidence'];
 
 export default function InputScreen({ onSubmitUrl, onSubmitFile, error }: Props) {
     const [mode, setMode] = useState<'url' | 'file'>('url');

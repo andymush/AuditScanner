@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreAuditRequest;
 use App\Jobs\RunAuditJob;
 use App\Models\AuditReport;
 use Illuminate\Http\JsonResponse;
@@ -10,13 +11,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AuditController extends Controller
 {
-    public function submit(Request $request): JsonResponse
+    public function submit(StoreAuditRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'source_type' => ['required', 'in:github_url,file_upload'],
-            'repo_url' => ['required_if:source_type,github_url', 'nullable', 'url'],
-            'file' => ['required_if:source_type,file_upload', 'nullable', 'file', 'mimes:zip', 'max:20480'],
-        ]);
+        $validated = $request->validated();
 
         $report = AuditReport::create([
             'user_id' => $request->user()->id,

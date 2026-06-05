@@ -788,7 +788,9 @@ export default function InputScreen({ onSubmitUrl, onSubmitFile, error }) {
 
       {/* Feature tags */}
       <div className="flex flex-wrap justify-center gap-3 mt-10">
-        {['Claude Sonnet', 'Gemini Flash', 'CVSS Scoring', 'CVE Cross-Reference',
+        {['Claude Sonnet', 
+        //'Gemini Flash', 
+        'CVSS Scoring', 'CVE Cross-Reference',
           'Dual-Engine Confidence'].map(tag => (
           <span key={tag}
             className="font-mono text-xs text-[#666680] border border-white/7
